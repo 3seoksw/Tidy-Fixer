@@ -2,10 +2,29 @@
   <img src="Design/TidyFixer-icon.png" width="128" alt="Tidy Fixer icon">
 </p>
 
-# Tidy Fixer
+<h1 align="center">Tidy Fixer</h1>
 
-A private macOS menu-bar app that fixes grammar and awkward phrasing with small edits, so the message still sounds like you.
-It runs on a local model through [Ollama](https://ollama.com), so your drafts stay on your Mac.
+<p align="center">
+  A private macOS menu-bar app that fixes grammar and awkward phrasing with small edits, so the message still sounds like you.<br>
+  It runs on a local model through <a href="https://ollama.com">Ollama</a>, so your drafts stay on your Mac.
+</p>
+
+## Screenshots
+
+### Tidy Fixer Bar
+
+<p align="center">
+  <img width="747" height="115" alt="Screenshot 2026-11-15 at 3 46 35 AM" src="https://github.com/user-attachments/assets/58588206-16fd-4fbf-8090-573ff0fe074c" />
+  <img width="739" height="120" alt="Screenshot 2026-11-15 at 3 50 24 AM" src="https://github.com/user-attachments/assets/3252d004-922d-45cc-81f1-a8bf025f642d" />
+</p>
+
+### Settings
+
+<p align="center">
+  <img width="904" height="653" alt="Screenshot 2026-11-15 at 3 51 01 AM" src="https://github.com/user-attachments/assets/4e468b79-b892-4330-9692-a90738ee1f65" />
+  <img width="895" height="645" alt="Screenshot 2026-11-15 at 3 51 32 AM" src="https://github.com/user-attachments/assets/437c917c-9905-4d43-a939-16e0f1c7577d" />
+</p>
+
 
 ## How it works
 
