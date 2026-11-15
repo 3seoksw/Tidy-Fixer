@@ -57,6 +57,11 @@ struct BarView: View {
         return vm.autoLabel ?? (vm.isWorking || vm.classifying ? "Detecting…" : nil)
     }
 
+    /// Tev1 is working on a pick: the live check while typing, or the one Fix needs before rewriting.
+    private var isDetecting: Bool {
+        vm.selection == BarViewModel.auto && (vm.classifying || (vm.isWorking && vm.autoLabel == nil))
+    }
+
     private var styleMenu: some View {
         Menu {
             Picker("Style", selection: $vm.selection) {
@@ -73,11 +78,16 @@ struct BarView: View {
         .fixedSize()
         .overlay(alignment: .bottom) {
             if let caption = autoCaption {
-                Text(caption)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-                    .offset(y: 14)
+                HStack(spacing: 4) {
+                    if isDetecting {
+                        ProgressView().controlSize(.mini)
+                    }
+                    Text(caption)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+                .offset(y: 14)
             }
         }
     }
