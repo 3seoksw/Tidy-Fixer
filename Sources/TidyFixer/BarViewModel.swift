@@ -34,7 +34,9 @@ final class BarViewModel: ObservableObject {
     /// The profile Tev1 picked, by id, so a rename or prompt edit in Settings shows up right away.
     @Published var autoPick: String?
     var autoLabel: String? { autoPick.flatMap { store.profile(id: $0)?.name } }
-    @Published var classifying = false
+    /// True only while a Tev1 request is in flight, live or from Fix. Drives the spinner.
+    @Published private(set) var classifying = false
+    private var classifyInFlight = 0
     @Published var state: BarState = .idle
     @Published var openCount = 0
     @Published var inputHeight: CGFloat = 17
@@ -78,7 +80,6 @@ final class BarViewModel: ObservableObject {
     /// The bar was hidden. Stops live classification and lets the lifecycle drop an unused warm-up.
     func barClosed() {
         classifyTask?.cancel()
-        classifying = false
         lifecycle.barClosed()
     }
 
@@ -201,6 +202,13 @@ final class BarViewModel: ObservableObject {
     /// One Tev1 call, remembered for the same text, source app, and profiles.
     private func classify(_ text: String) async throws -> Profile {
         let key = pickKey(for: text)
+        // A counter, so a cancelled call finishing late cannot switch off a newer one.
+        classifyInFlight += 1
+        classifying = true
+        defer {
+            classifyInFlight -= 1
+            classifying = classifyInFlight > 0
+        }
         let p = try await classifier.classify(
             text: text, appName: sourceApp?.localizedName, options: store.profiles)
         try Task.checkCancellation()
@@ -219,7 +227,6 @@ final class BarViewModel: ObservableObject {
     /// Skipped only when the style is fixed by hand. The source app name is passed as context.
     private func scheduleClassify() {
         classifyTask?.cancel()
-        classifying = false
         let text = Self.split(input).draft
         guard selection == Self.auto, !busy, lifecycle.pressure != .critical else { return }
         guard text.count >= 8 else {
@@ -232,8 +239,6 @@ final class BarViewModel: ObservableObject {
         classifyTask = Task {
             try? await Task.sleep(nanoseconds: 700_000_000)
             guard !Task.isCancelled else { return }
-            classifying = true
-            defer { classifying = false }
             _ = try? await classify(text)
         }
     }

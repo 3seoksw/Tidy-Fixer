@@ -14,7 +14,7 @@ protocol StyleClassifier {
 
 enum ModelConfig {
     static var rewriter: String {
-        UserDefaults.standard.string(forKey: "rewriterModel") ?? "qwen3:14b"
+        UserDefaults.standard.string(forKey: "rewriterModel") ?? "qwen3:8b"
     }
     static var classifier: String {
         UserDefaults.standard.string(forKey: "classifierModel") ?? "tev1:4b"

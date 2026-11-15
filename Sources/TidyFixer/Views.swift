@@ -54,12 +54,12 @@ struct BarView: View {
     /// Grey line under "Auto" showing which profile was picked.
     private var autoCaption: String? {
         guard vm.selection == BarViewModel.auto else { return nil }
-        return vm.autoLabel ?? (vm.isWorking || vm.classifying ? "Detecting…" : nil)
+        return vm.autoLabel ?? (vm.classifying ? "Detecting…" : nil)
     }
 
-    /// Tev1 is working on a pick: the live check while typing, or the one Fix needs before rewriting.
+    /// Tev1 is working on a pick: the live check while typing, or the one Fix runs before rewriting.
     private var isDetecting: Bool {
-        vm.selection == BarViewModel.auto && (vm.classifying || (vm.isWorking && vm.autoLabel == nil))
+        vm.selection == BarViewModel.auto && vm.classifying
     }
 
     private var styleMenu: some View {
