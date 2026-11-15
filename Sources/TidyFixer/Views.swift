@@ -51,10 +51,11 @@ struct BarView: View {
         return store.profile(id: vm.selection)?.name ?? "Auto"
     }
 
-    /// Grey line under "Auto" showing which profile was picked.
+    /// Grey line under "Auto". While Tev1 is working it says so, so an old pick is never shown
+    /// next to the spinner as if it were the new result.
     private var autoCaption: String? {
         guard vm.selection == BarViewModel.auto else { return nil }
-        return vm.autoLabel ?? (vm.classifying ? "Detecting…" : nil)
+        return vm.classifying ? "Detecting…" : vm.autoLabel
     }
 
     /// Tev1 is working on a pick: the live check while typing, or the one Fix runs before rewriting.
@@ -207,6 +208,41 @@ private extension View {
     }
 }
 
+/// A drop-down with normal text and an accent-coloured chevron. A plain Picker colours the text
+/// and the chevron the same way, so this draws the label itself.
+private struct SettingsDropdown<Value: Hashable>: View {
+    let options: [(title: String, value: Value)]
+    @Binding var selection: Value
+    var width: CGFloat
+
+    var body: some View {
+        Menu {
+            // Toggles give native checkmark rows. An inline Picker here adds a blank title row on top.
+            ForEach(options, id: \.value) { option in
+                Toggle(
+                    option.title,
+                    isOn: Binding(get: { selection == option.value }, set: { _ in selection = option.value }))
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(options.first { $0.value == selection }?.title ?? "")
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.appAccent)
+            }
+            .fieldBackground()
+            .frame(width: width)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+    }
+}
+
 struct SettingsView: View {
     static let modelsPage = "models"
 
@@ -304,33 +340,25 @@ struct SettingsView: View {
                     title: "Rewriting model",
                     detail: "Any text model installed in Ollama. Switching unloads the previous one. A bigger model follows your prompt better but uses more RAM and is slower."
                 ) {
-                    Picker("", selection: $settings.rewriterModel) {
-                        ForEach(settings.modelOptions, id: \.self) {
-                            Text(settings.isMissing($0) ? "\($0) (not installed)" : $0).tag($0)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 200)
+                    SettingsDropdown(
+                        options: settings.modelOptions.map {
+                            (title: settings.isMissing($0) ? "\($0) (not installed)" : $0, value: $0)
+                        },
+                        selection: $settings.rewriterModel, width: 200)
                 }
                 SettingRow(
                     title: "Unload after idle",
                     detail: "How long Ollama keeps the rewriting model in memory after you last used it. Longer makes the next fix faster, shorter frees RAM sooner."
                 ) {
-                    Picker("", selection: $settings.idleTimeout) {
-                        ForEach(settings.idleOptions, id: \.value) { Text($0.title).tag($0.value) }
-                    }
-                    .labelsHidden()
-                    .frame(width: 160)
+                    SettingsDropdown(
+                        options: settings.idleOptions, selection: $settings.idleTimeout, width: 160)
                 }
                 SettingRow(
                     title: "Context window",
                     detail: "How much text the rewriting model can hold at once. It also sets the longest message you can fix. Larger uses more RAM, and changing it reloads the model on the next fix."
                 ) {
-                    Picker("", selection: $settings.numCtx) {
-                        ForEach(ModelSettings.contextChoices, id: \.value) { Text($0.title).tag($0.value) }
-                    }
-                    .labelsHidden()
-                    .frame(width: 260)
+                    SettingsDropdown(
+                        options: ModelSettings.contextChoices, selection: $settings.numCtx, width: 260)
                 }
                 SettingRow(
                     title: "Warm up when the bar opens",
