@@ -23,8 +23,8 @@ struct ProtectedTests {
 
     @Test func testDiffMarksChangedWordOnly() {
         let segs = TextDiff.segments(old: "I wont go", new: "I won't go")
-        #expect(segs.contains(DiffSegment(text: "wont", kind: .removed)))
-        #expect(segs.contains(DiffSegment(text: "won't", kind: .added)))
+        #expect(segs.contains(DiffSegment(text: "wont ", kind: .removed)))
+        #expect(segs.contains(DiffSegment(text: "won't ", kind: .added)))
         #expect(!segs.contains { $0.kind != .same && $0.text.contains("go") })
     }
 
@@ -49,6 +49,23 @@ struct ProtectedTests {
 
     @Test func testRemovedWordsKeepTheirSpaces() {
         let segs = TextDiff.segments(old: "ok that I can make it on the week", new: "ok my week")
-        #expect(segs.contains(DiffSegment(text: "that I can make it on the", kind: .removed)))
+        #expect(segs.contains(DiffSegment(text: "that I can make it on the ", kind: .removed)))
+    }
+
+    @Test func testInvisibleCharactersDoNotCountAsChanges() {
+        let segs = TextDiff.segments(old: "\u{200B}Hi Sam", new: "Hi Sam")
+        #expect(segs.allSatisfy { $0.kind == .same })
+    }
+
+    @Test func testRemovedWordKeepsTheSpaceBeforeIt() {
+        let segs = TextDiff.segments(old: "defer using memory at this moment.", new: "defer using memory.")
+        #expect(segs.map(\.text).joined().hasPrefix("defer using memory"))
+        #expect(segs.first?.kind == .same)
+    }
+
+    @Test @MainActor func testLoneDashesAfterTheDraftAreNotContext() {
+        let parts = BarViewModel.split("Hi Sam!\nSee you then.\n---\n")
+        #expect(parts.draft == "Hi Sam!\nSee you then.")
+        #expect(parts.context == nil)
     }
 }

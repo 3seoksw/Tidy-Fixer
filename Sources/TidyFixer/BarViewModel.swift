@@ -26,15 +26,15 @@ final class BarViewModel: ObservableObject {
     @Published var selection = BarViewModel.auto {
         didSet {
             if selection != oldValue {
-                refreshAutoLabel()
+                if selection != Self.auto { autoPick = nil }
                 scheduleClassify()
             }
         }
     }
-    /// The profile Tev1 picked, by id, so a rename or prompt edit in Settings shows up right away.
+    /// Tev1's pick, stored by id so a rename in Settings shows up right away.
     @Published var autoPick: String?
     var autoLabel: String? { autoPick.flatMap { store.profile(id: $0)?.name } }
-    /// True only while a Tev1 request is in flight, live or from Fix. Drives the spinner.
+    /// True only while a Tev1 request is in flight. Drives the spinner.
     @Published private(set) var classifying = false
     private var classifyInFlight = 0
     @Published var state: BarState = .idle
@@ -66,32 +66,27 @@ final class BarViewModel: ObservableObject {
         }
     }
 
-    /// Called when the bar opens. Warm-up runs in the background so the bar never waits on it.
     func open(source: NSRunningApplication?) {
         if let source, source.bundleIdentifier != Bundle.main.bundleIdentifier {
             sourceApp = source
         }
         openCount += 1
-        refreshAutoLabel()
         scheduleClassify()
         lifecycle.warm()
     }
 
-    /// The bar was hidden. Stops live classification and lets the lifecycle drop an unused warm-up.
     func barClosed() {
         classifyTask?.cancel()
         lifecycle.barClosed()
     }
 
-    /// App is quitting. Cancels our work, then releases the model if no other client is using it.
     func shutdown() {
         task?.cancel()
         classifyTask?.cancel()
         lifecycle.shutdown()
     }
 
-    /// A line that starts the quoted thread: a rule of dashes or underscores, "On <date> <name>
-    /// wrote:", "From: …", or "-----Original Message-----".
+    /// Lines that start a quoted thread: a rule of dashes or underscores, "On … wrote:", "From: …".
     private static let threadStart = try! NSRegularExpression(
         pattern: #"^(-{3,}|_{3,}|On .+ wrote:|From:\s.+|-+\s*Original Message\s*-+)$"#)
 
@@ -100,15 +95,16 @@ final class BarViewModel: ObservableObject {
         return threadStart.firstMatch(in: t, range: NSRange(t.startIndex..., in: t)) != nil
     }
 
-    /// Text from the first thread-start line on is an earlier message, kept as context for the
-    /// model. Only the text above it is edited, compared, and classified.
+    /// Everything from the first thread-start line on is context for the model. Only the draft above
+    /// it is edited, diffed, and classified.
     static func split(_ input: String) -> (draft: String, context: String?) {
         let whole = (draft: input.trimmingCharacters(in: .whitespacesAndNewlines), context: String?.none)
         let lines = input.split(separator: "\n", omittingEmptySubsequences: false)
         guard let at = lines.firstIndex(where: startsThread) else { return whole }
         let draft = lines[..<at].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         let context = lines[at...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return draft.isEmpty ? whole : (draft, context)
+        let hasContext = !context.drop(while: { "-_ \n\t".contains($0) }).isEmpty
+        return draft.isEmpty ? whole : (draft, hasContext ? context : nil)
     }
 
     func fix() {
@@ -151,10 +147,10 @@ final class BarViewModel: ObservableObject {
         }
     }
 
-    /// Ignores curly versus straight quotes and whitespace differences, which models often change.
+    /// Models often swap curly quotes or rewrap lines, which should not count as a change.
     private static func sameText(_ a: String, _ b: String) -> Bool {
         func norm(_ s: String) -> String {
-            s.replacingOccurrences(of: "\u{2019}", with: "'").replacingOccurrences(of: "\u{2018}", with: "'")
+            TextDiff.stripInvisible(s).replacingOccurrences(of: "\u{2019}", with: "'").replacingOccurrences(of: "\u{2018}", with: "'")
                 .replacingOccurrences(of: "\u{201C}", with: "\"").replacingOccurrences(of: "\u{201D}", with: "\"")
                 .split(whereSeparator: \.isWhitespace).joined(separator: " ")
         }
@@ -183,11 +179,7 @@ final class BarViewModel: ObservableObject {
         }
     }
 
-    private func refreshAutoLabel() {
-        if selection != Self.auto { autoPick = nil }
-    }
-
-    /// A manual choice wins and Tev1 is never called for it. In Auto, Tev1 decides.
+    /// A manual choice never calls Tev1.
     private func resolveProfile(for text: String) async throws -> Profile {
         if selection != Self.auto, let chosen = store.profile(id: selection) { return chosen }
         if let live = livePick, live.key == pickKey(for: text), let p = store.profile(id: live.id) {
@@ -199,10 +191,10 @@ final class BarViewModel: ObservableObject {
         return try await classify(text)
     }
 
-    /// One Tev1 call, remembered for the same text, source app, and profiles.
+    /// One Tev1 call, cached for the same text, source app, and profiles.
     private func classify(_ text: String) async throws -> Profile {
         let key = pickKey(for: text)
-        // A counter, so a cancelled call finishing late cannot switch off a newer one.
+        // A counter, so a cancelled call finishing late cannot switch off a newer one's spinner.
         classifyInFlight += 1
         classifying = true
         defer {
@@ -217,14 +209,12 @@ final class BarViewModel: ObservableObject {
         return p
     }
 
-    /// The cached style is valid only for the same text, source app, and profile definitions.
     private func pickKey(for text: String) -> String {
         let profiles = store.profiles.map { "\($0.id)|\($0.name)|\($0.style)" }.joined(separator: ";")
         return "\(sourceApp?.localizedName ?? "")\n\(profiles)\n\(text)"
     }
 
-    /// Live Tev1 decision while typing. Waits for a short pause and drops stale requests.
-    /// Skipped only when the style is fixed by hand. The source app name is passed as context.
+    /// Live Tev1 pick after a short typing pause. Skipped when a profile is chosen by hand.
     private func scheduleClassify() {
         classifyTask?.cancel()
         let text = Self.split(input).draft

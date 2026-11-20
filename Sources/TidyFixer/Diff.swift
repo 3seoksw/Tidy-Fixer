@@ -8,28 +8,42 @@ struct DiffSegment: Equatable {
     var kind: DiffKind
 }
 
-/// Word-level diff. Quote style and whitespace differences are not counted as changes.
+/// Word-level diff. Quote style, whitespace, and invisible characters are not counted as changes.
 enum TextDiff {
-    private static let tokenPattern = try! NSRegularExpression(pattern: #"\S+|\s+"#)
-
-    static func tokens(_ s: String) -> [String] {
-        tokenPattern.matches(in: s, range: NSRange(s.startIndex..., in: s)).compactMap {
-            Range($0.range, in: s).map { String(s[$0]) }
-        }
+    /// Drops invisible format characters (U+200B, U+2060, U+FEFF), which copied text often carries.
+    static func stripInvisible(_ s: String) -> String {
+        String(String.UnicodeScalarView(s.unicodeScalars.filter { $0.properties.generalCategory != .format }))
     }
 
-    private static func key(_ token: String) -> String {
-        if token.first?.isWhitespace == true { return " " }
-        return token.replacingOccurrences(of: "\u{2019}", with: "'")
+    private static func key(_ word: String) -> String {
+        word.replacingOccurrences(of: "\u{2019}", with: "'")
             .replacingOccurrences(of: "\u{2018}", with: "'")
             .replacingOccurrences(of: "\u{201C}", with: "\"")
             .replacingOccurrences(of: "\u{201D}", with: "\"")
     }
 
+    /// Each word with the whitespace after it, so line breaks survive.
+    private static func words(_ s: String) -> [(word: String, space: String)] {
+        var result: [(String, String)] = []
+        var word = ""
+        var space = ""
+        for ch in stripInvisible(s) {
+            if ch.isWhitespace {
+                space.append(ch)
+            } else {
+                if !space.isEmpty, !word.isEmpty { result.append((word, space)); word = ""; space = "" }
+                space = ""
+                word.append(ch)
+            }
+        }
+        if !word.isEmpty { result.append((word, space)) }
+        return result
+    }
+
     static func segments(old: String, new: String) -> [DiffSegment] {
-        let a = tokens(old)
-        let b = tokens(new)
-        let diff = b.map(key).difference(from: a.map(key))
+        let a = words(old)
+        let b = words(new)
+        let diff = b.map { key($0.word) }.difference(from: a.map { key($0.word) })
         var removed = Set<Int>()
         var added = Set<Int>()
         for change in diff {
@@ -39,8 +53,6 @@ enum TextDiff {
             }
         }
         var out: [DiffSegment] = []
-        var i = 0
-        var j = 0
         func push(_ text: String, _ kind: DiffKind) {
             if let last = out.last, last.kind == kind {
                 out[out.count - 1].text += text
@@ -48,18 +60,17 @@ enum TextDiff {
                 out.append(DiffSegment(text: text, kind: kind))
             }
         }
+        var i = 0
+        var j = 0
         while i < a.count || j < b.count {
             if i < a.count, removed.contains(i) {
-                // Keep spaces between removed words, but never start a removed run with one.
-                if a[i].first?.isWhitespace != true || out.last?.kind == .removed {
-                    push(a[i].first?.isWhitespace == true ? " " : a[i], .removed)
-                }
+                push(a[i].word + (a[i].space.contains("\n") ? a[i].space : " "), .removed)
                 i += 1
             } else if j < b.count, added.contains(j) {
-                push(b[j], .added)
+                push(b[j].word + b[j].space, .added)
                 j += 1
             } else if j < b.count {
-                push(b[j], .same)
+                push(b[j].word + b[j].space, .same)
                 i += 1
                 j += 1
             } else {
@@ -71,10 +82,7 @@ enum TextDiff {
 
     static func attributed(old: String, new: String) -> AttributedString {
         var result = AttributedString()
-        var previous = DiffKind.same
         for seg in segments(old: old, new: new) {
-            if previous == .removed, seg.kind == .added { result += AttributedString(" ") }
-            previous = seg.kind
             var piece = AttributedString(seg.text)
             switch seg.kind {
             case .same: break
