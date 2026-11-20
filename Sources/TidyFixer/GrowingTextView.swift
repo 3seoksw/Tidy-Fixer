@@ -7,7 +7,6 @@ struct GrowingTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var height: CGFloat
     var focusTick: Int
-    /// About a third of the screen, then it scrolls.
     var maxHeight: CGFloat { (NSScreen.main?.visibleFrame.height ?? 900) * 0.35 }
     var onSubmit: () -> Void
 
@@ -77,8 +76,7 @@ struct GrowingTextView: NSViewRepresentable {
 
         private var measureQueued = false
 
-        /// Measuring inside a layout pass makes the text view lay itself out again, which macOS
-        /// flags as layout recursion. Do it on the next main-loop turn, once per burst.
+        /// Measuring during a layout pass triggers a layout-recursion warning, so do it next turn.
         func measureSoon() {
             guard !measureQueued else { return }
             measureQueued = true
@@ -108,5 +106,23 @@ final class MeasuringTextView: NSTextView {
     override func layout() {
         super.layout()
         onLayout?()
+    }
+
+    /// Copied text often ends with a newline that would leave a blank last line. Newlines are
+    /// dropped only where the paste meets the start or end of the field.
+    override func paste(_ sender: Any?) {
+        guard var text = NSPasteboard.general.string(forType: .string) else { return super.paste(sender) }
+        let range = selectedRange()
+        if range.upperBound == (string as NSString).length {
+            while let last = text.last, last.isNewline { text.removeLast() }
+        }
+        if range.location == 0 {
+            while let first = text.first, first.isNewline { text.removeFirst() }
+        }
+        insertText(text, replacementRange: range)
+    }
+
+    override func pasteAsPlainText(_ sender: Any?) {
+        paste(sender)
     }
 }
