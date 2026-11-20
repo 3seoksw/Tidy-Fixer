@@ -48,9 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    /// Loaded straight from the file at twice the size, then marked as a template so macOS draws
-    /// it in the menu bar's own colour using its alpha. NSImage(named:) would also work, but it
-    /// logs CoreUI noise when the app has no asset catalog.
+    /// Loaded from the file, not NSImage(named:), which logs CoreUI noise without an asset catalog.
     private static func menuBarIcon() -> NSImage? {
         if let url = Bundle.main.url(forResource: "menubarTemplate@2x", withExtension: "png"),
             let image = NSImage(contentsOf: url)
@@ -81,14 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in MainActor.assumeIsolated { self?.pinBottom() } }
     }
 
-    /// The hosting view resizes the window and keeps the top edge fixed, so pin the bottom edge
-    /// back to the anchor. The bar then grows upward.
+    /// The hosting view keeps the top edge fixed when it resizes, so pin the bottom for upward growth.
     private func pinBottom() {
         guard panel.frame.minY != anchorBottom else { return }
         panel.setFrameOrigin(NSPoint(x: panel.frame.minX, y: anchorBottom))
     }
 
-    /// Without an Edit menu, a menu-bar-only app has no Cmd+A/C/V/X/Z in its text field.
+    /// Without an Edit menu the text field gets no Cmd+A/C/V/X/Z.
     private func setUpMainMenu() {
         let main = NSMenu()
         let appItem = NSMenuItem()
@@ -172,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = w
         }
         settingsSelection.id = profiles ? store.profiles.first?.id : SettingsView.modelsPage
-        // A menu-bar-only app is hidden from Cmd+Tab, so show up as a normal app while Settings is open.
+        // Menu-bar-only apps are hidden from Cmd+Tab, so be a normal app while Settings is open.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)

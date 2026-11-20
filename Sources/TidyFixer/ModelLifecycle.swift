@@ -3,9 +3,8 @@ import Foundation
 enum ModelState { case unloaded, loading, ready, inUse, unloading }
 enum MemoryPressure { case normal, warning, critical }
 
-/// Owns the rewriter's life in memory: one warm-up at a time, no unloading during use, and no
-/// unloading of a model another client has touched. Ollama holds the weights; this only decides
-/// when to ask for a load or an unload.
+/// Decides when to ask Ollama to load or unload the rewriter: one warm-up at a time, never during
+/// use, and not if another client has touched the model.
 @MainActor
 final class ModelLifecycle {
     private let rewriter: TextRewriter
@@ -15,17 +14,15 @@ final class ModelLifecycle {
     private var uses = 0
     private var warmTask: Task<Void, Never>?
     private var unloadTask: Task<Void, Never>?
-    /// True while the bar is open and wants the model.
     private var wanted = false
     private var unloadWhenFree = false
-    /// When Ollama should drop the model if nobody else touches it, going by what we last asked for.
+    /// When Ollama should drop the model, going by our last keep-alive.
     private var ourExpiry: Date?
 
     init(rewriter: TextRewriter) {
         self.rewriter = rewriter
     }
 
-    /// Bar opened. Deduplicated, and skipped under memory pressure.
     func warm() {
         wanted = true
         guard ModelConfig.warmOnOpen, pressure == .normal, warmTask == nil else { return }
@@ -46,18 +43,16 @@ final class ModelLifecycle {
         }
     }
 
-    /// Lets Fix wait for an in-flight warm-up so the UI can say "Getting ready…".
     func waitUntilWarm() async {
         await warmTask?.value
     }
 
-    /// Bar closed. A load in flight is not cancelled, since the server may finish it anyway.
-    /// It is unloaded when it completes, and a model that was already warm just idles out.
+    /// A load in flight is not cancelled, since the server may finish it anyway. It is unloaded when
+    /// it completes. A model that was already warm just idles out.
     func barClosed() {
         wanted = false
     }
 
-    /// Runs one request. Queues behind an unload, and blocks unloading until it finishes.
     func use<T>(_ body: () async throws -> T) async throws -> T {
         await unloadTask?.value
         uses += 1

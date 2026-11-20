@@ -51,14 +51,12 @@ struct BarView: View {
         return store.profile(id: vm.selection)?.name ?? "Auto"
     }
 
-    /// Grey line under "Auto". While Tev1 is working it says so, so an old pick is never shown
-    /// next to the spinner as if it were the new result.
+    /// While Tev1 works it says so, so an old pick never sits next to the spinner as a result.
     private var autoCaption: String? {
         guard vm.selection == BarViewModel.auto else { return nil }
         return vm.classifying ? "Detecting…" : vm.autoLabel
     }
 
-    /// Tev1 is working on a pick: the live check while typing, or the one Fix runs before rewriting.
     private var isDetecting: Bool {
         vm.selection == BarViewModel.auto && vm.classifying
     }
@@ -208,8 +206,7 @@ private extension View {
     }
 }
 
-/// A drop-down with normal text and an accent-coloured chevron. A plain Picker colours the text
-/// and the chevron the same way, so this draws the label itself.
+/// A plain Picker colours its text and chevron the same, so this draws the label itself.
 private struct SettingsDropdown<Value: Hashable>: View {
     let options: [(title: String, value: Value)]
     @Binding var selection: Value
@@ -217,7 +214,7 @@ private struct SettingsDropdown<Value: Hashable>: View {
 
     var body: some View {
         Menu {
-            // Toggles give native checkmark rows. An inline Picker here adds a blank title row on top.
+            // Toggles give checkmark rows. An inline Picker adds a blank title row.
             ForEach(options, id: \.value) { option in
                 Toggle(
                     option.title,

@@ -41,7 +41,6 @@ struct OllamaClient {
         }
     }
 
-    /// A fixed context and output limit keeps the model's memory use small and predictable.
     /// Warm-up and chat must send the same num_ctx, or Ollama reloads the model.
     func chat(
         model: String, system: String?, user: String, keepAlive: String?,
@@ -65,7 +64,6 @@ struct OllamaClient {
         return text
     }
 
-    /// An empty generate request loads the model without producing text.
     func warm(model: String, keepAlive: String, numCtx: Int? = nil) async throws {
         var body: [String: Any] = ["model": model, "keep_alive": keepAlive]
         if let numCtx { body["options"] = ["num_ctx": numCtx] }
@@ -77,7 +75,7 @@ struct OllamaClient {
             "api/generate", ["model": model, "keep_alive": 0], model: model, timeout: 3)
     }
 
-    /// Installed models that can write text. Decision models like Tev1 are left out.
+    /// Installed text models. Decision models like Tev1 are left out.
     func chatModels() async -> [String] {
         guard let (data, _) = try? await URLSession.shared.data(
             for: URLRequest(url: base.appendingPathComponent("api/tags"), timeoutInterval: 5)),
@@ -96,14 +94,13 @@ struct OllamaClient {
         return found
     }
 
-    /// When the server will drop a loaded model, or nil if it isn't loaded.
     func expiresAt(model: String) async -> Date? {
         guard let (data, _) = try? await URLSession.shared.data(for: psRequest()) else { return nil }
         return Self.parseExpiry(data, model: model)
     }
 
-    /// Quit-time release. Blocks the caller for a few seconds at most, because the main queue
-    /// is not serviced while the app is terminating. Skips models another client has touched.
+    /// Quit-time release. Blocks for a few seconds at most, since the main queue stops during
+    /// termination. Skips a model another client has touched.
     func unloadAtQuit(model: String, ourExpiry: Date?) {
         if let ourExpiry, let data = Self.send(psRequest()),
             let server = Self.parseExpiry(data, model: model), server > ourExpiry.addingTimeInterval(5)

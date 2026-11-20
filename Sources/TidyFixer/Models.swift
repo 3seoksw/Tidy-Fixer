@@ -35,16 +35,14 @@ enum ModelConfig {
     }
     static var warmOnOpen: Bool { flag("warmOnOpen", default: true) }
     static var unloadOnPressure: Bool { flag("unloadOnPressure", default: true) }
-    /// Off by default: the idle timeout already frees the model, and the app cannot prove that no
-    /// other Ollama client is using it.
+    /// Off by default: the idle timeout already frees the model, and another client may be using it.
     static var unloadOnQuit: Bool { flag("unloadOnQuit", default: false) }
 
     private static func flag(_ key: String, default value: Bool) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? value
     }
 
-    /// Context window in tokens. The output and input limits follow from it: output gets half,
-    /// and input about 1.5 characters per token, which leaves room for the prompt.
+    /// Context window in tokens. Output gets half, and input about 1.5 characters per token.
     static var numCtx: Int {
         let v = UserDefaults.standard.integer(forKey: "numCtx")
         return v > 0 ? v : 4096
@@ -94,13 +92,12 @@ struct OllamaRewriter: TextRewriter {
     }
 }
 
-/// Tev1 is a decision model, so it goes through /v1/systemone instead of chat.
-/// keep_alive is left at the server default because the OMP classifier shares this model.
+/// Tev1 is a decision model, so it uses /v1/systemone, not chat. keep_alive stays at the server
+/// default because the OMP classifier shares this model.
 struct Tev1Classifier: StyleClassifier {
     var client = OllamaClient()
 
-    /// Always returns the option with the highest probability. The probabilities sum to 1, so the
-    /// top one is a valid pick even when the margin is small.
+    /// Always returns the most probable option, even with a small margin.
     func classify(text: String, appName: String?, options: [Profile]) async throws -> Profile {
         let criteria = Dictionary(
             uniqueKeysWithValues: options.map { ($0.id, "\($0.name): \($0.style)") })

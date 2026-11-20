@@ -5,7 +5,6 @@ struct Profile: Codable, Identifiable, Hashable {
     var name: String
     /// Phrase passed to the rewriter, for example "casual message to a coworker".
     var style: String
-    /// System prompt used for this profile.
     var prompt: String
 
     static let basePrompt = """
